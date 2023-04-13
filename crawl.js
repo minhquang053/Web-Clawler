@@ -1,12 +1,6 @@
 const { JSDOM } = require('jsdom')
 
 function normalizeURL(url) {
-    // url = url.toLowerCase()
-    
-    // if (url.includes("://")) {
-    //     url = url.slice(url.indexOf("://") + 3)
-    // }
-    // return url
     const urlObject = new URL(url, 'https://example.org')
     normalizedURL = `${urlObject.hostname}${urlObject.pathname}`
     if (normalizedURL.length > 0 && normalizedURL.slice(-1) === '/') {
@@ -39,7 +33,42 @@ function getURLsFromHTML(htmlBody, baseURL) {
     return urls
 }
 
+async function crawlPage(baseURL, currentURL, pages) {
+    if (!currentURL.includes(baseURL)) {
+        return pages
+    }
+    normalizedURL = normalizeURL(currentURL)
+    if (normalizedURL in pages) {
+        pages[normalizedURL]++
+        return pages
+    }
+    pages[normalizedURL] = 1
+    console.log(`crawling ${normalizedURL}`)
+    try {
+        const response = await fetch(currentURL)
+        if (response.status > 399) {
+            console.log(`HTTP Error: Status code ${response.status}`)
+            return pages
+        }
+        const contentType = response.headers.get("Content-Type")
+        if (!contentType.includes('text/html')) {
+            console.log(contentType)
+            console.log(`Got non-html response: ${contentType}`)
+            return pages
+        }
+        htmlBody = await response.text()
+        internalLinks = getURLsFromHTML(htmlBody, baseURL)
+        for (link of internalLinks) {
+            pages = await crawlPage(baseURL, link, pages)
+        }
+    } catch (err) {
+        // console.log(err.message)
+    }
+    return pages
+}
+
 module.exports = {
     normalizeURL,
-    getURLsFromHTML
+    getURLsFromHTML,
+    crawlPage
 }
